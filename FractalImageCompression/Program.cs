@@ -8,25 +8,49 @@ namespace FractalImageCompression
 {
     class Program
     {
-        const int SRC_SIZE = 8;
-        const int DST_SIZE = 4;
+        const int SRC_SIZE = 4;
+        const int DST_SIZE = 2;
+        const int ITERATIONS = 8;
+        const float CONTRAST = 0.25f;
 
-        static Image LoadImage(string path)
+        static Image[] LoadImage(string path)
         {
             using (SKBitmap bitmap = SKBitmap.Decode(path))
             {
-                Image newImage = new Image(bitmap.Height, bitmap.Width);
-                for (int y = 0; y < newImage.Height; y++)
+                Image[] images = new Image[3] 
                 {
-                    for (int x = 0; x < newImage.Width; x++)
+                    new Image(bitmap.Height, bitmap.Width),
+                    new Image(bitmap.Height, bitmap.Width),
+                    new Image(bitmap.Height, bitmap.Width)
+                };
+                for (int y = 0; y < bitmap.Height; y++)
+                {
+                    for (int x = 0; x < bitmap.Width; x++)
                     {
                         SKColor pixel = bitmap.GetPixel(x, y);
-                        float avg = (pixel.Red + pixel.Green + pixel.Blue) / 3;
-                        newImage.Data[y, x] = avg / 255;
+                        images[0].Data[y, x] = (float)pixel.Red / 255;
+                        images[1].Data[y, x] = (float)pixel.Green / 255;
+                        images[2].Data[y, x] = (float)pixel.Blue / 255;
                     }
                 }
-                return newImage;
+                return images;
             }
+        }
+
+        static SKBitmap ToBitmap(Image[] imageData)
+        {
+            SKBitmap bitmap = new SKBitmap(imageData[0].Width, imageData[0].Height, SKColorType.Bgra8888, SKAlphaType.Opaque);
+            for (int y = 0; y < bitmap.Height; y++)
+            {
+                for (int x = 0; x < bitmap.Width; x++)
+                {
+                    byte red = (byte)(Math.Min(Math.Max(imageData[0].Data[y, x] * 255, 0), 255));
+                    byte green = (byte)(Math.Min(Math.Max(imageData[1].Data[y, x] * 255, 0), 255));
+                    byte blue = (byte)(Math.Min(Math.Max(imageData[2].Data[y, x] * 255, 0), 255));
+                    bitmap.SetPixel(x, y, new SKColor(red, green, blue));
+                }
+            }
+            return bitmap;
         }
 
         static List<Block> MakeAllTransforms(Image[,] sourceBlocks)
@@ -59,16 +83,17 @@ namespace FractalImageCompression
             List<Block> allTransformedBlocks = MakeAllTransforms(sourceBlocks);
 
             Atom[,] compressedData = new Atom[destBlocks.GetLength(0), destBlocks.GetLength(1)];
-            for (int y = 0; y < destBlocks.GetLength(0); y++)
+            Parallel.For(0, destBlocks.GetLength(0), y =>
             {
-                for (int x = 0; x < destBlocks.GetLength(1); x++)
+                Parallel.For(0, destBlocks.GetLength(1), x =>
                 {
+                    Console.WriteLine($"Compressing Cell: [{y}, {x}]");
                     float minDistance = float.PositiveInfinity;
 
                     Image destBlock = destBlocks[y, x];
                     foreach (Block block in allTransformedBlocks)
                     {
-                        float contrast = 0.75f;
+                        float contrast = CONTRAST;
                         float brightness = destBlock.Add(block.Image.Multiply(-contrast)).Average();
 
                         float distance = destBlock.DistanceTo(block.Image.Multiply(contrast).Add(brightness));
@@ -79,8 +104,8 @@ namespace FractalImageCompression
                             minDistance = distance;
                         }
                     }
-                }
-            }
+                });
+            });
             return compressedData;
         }
 
@@ -114,13 +139,34 @@ namespace FractalImageCompression
 
         static void Main(string[] args)
         {
-            Image original = LoadImage(args[0]);
-            Atom[,] compressedData = Compress(original);
-            Image decompressed = Decompress(compressedData, 16).Last();
+            Console.WriteLine("Loading base image...");
+            Image[] originalData = LoadImage(args[0]);
+
+            Console.WriteLine("Base image loaded, beginning compression...");
+            Atom[][,] compressedData = new Atom[3][,];
+
+            Console.WriteLine("Compressing red channel...");
+            compressedData[0] = Compress(originalData[0]);
+
+            Console.WriteLine("Compressing green channel...");
+            compressedData[1] = Compress(originalData[1]);
+
+            Console.WriteLine("Compressing blue channel...");
+            compressedData[2] = Compress(originalData[2]);
+
+            Console.WriteLine("Compression completed, beginning decompression...");
+            Image[] decompressed = new Image[3]
+            {
+                Decompress(compressedData[0], ITERATIONS).Last(),
+                Decompress(compressedData[1], ITERATIONS).Last(),
+                Decompress(compressedData[2], ITERATIONS).Last()
+            };
+            Console.WriteLine("Image decompressed successfully!");
 
             using (SKFileWStream fileHandle = new SKFileWStream("output.png"))
-            using (SKBitmap bitmap = decompressed.ToBitmap())
+            using (SKBitmap bitmap = ToBitmap(decompressed))
             {
+                Console.WriteLine("Writing decompressed image to file...");
                 SKPixmap.Encode(fileHandle, bitmap, SKEncodedImageFormat.Png, 100);
             }
         }

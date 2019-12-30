@@ -20,19 +20,5 @@ namespace FractalImageCompression
             }
             return blocks;
         }
-
-        public static SKBitmap ToBitmap(this Image image)
-        {
-            SKBitmap bitmap = new SKBitmap(image.Width, image.Height, SKColorType.Gray8, SKAlphaType.Opaque);
-            for (int y = 0; y < bitmap.Height; y++)
-            {
-                for (int x = 0; x < bitmap.Width; x++)
-                {
-                    byte pixelColor = (byte)(Math.Min(Math.Max(image.Data[y, x] * 255, 0), 255));
-                    bitmap.SetPixel(x, y, new SKColor(pixelColor, pixelColor, pixelColor));
-                }
-            }
-            return bitmap;
-        }
     }
 }
