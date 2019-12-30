@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "FractalImageCompression": {
+      "commandName": "Project",
+      "commandLineArgs": "input.png"
+    }
+  }
+}
