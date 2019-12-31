@@ -1,4 +1,5 @@
-﻿using SkiaSharp;
+﻿using CommandLine;
+using SkiaSharp;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
@@ -7,16 +8,32 @@ using System.Threading.Tasks;
 
 namespace FractalImageCompression
 {
+    public class Options
+    {
+        [Option('i', "inputfile", Required = true)]
+        public string InputFile { get; set; }
+
+        [Option('o', "outputfile", Required = true)]
+        public string OutputFile { get; set; }
+
+        [Option('d', "domainsize", Required = true)]
+        public int DomainSize { get; set; }
+
+        [Option('r', "rangesize", Required = true)]
+        public int RangeSize { get; set; }
+
+        [Option('n', "iter", Required = false, Default = 8)]
+        public int Iterations { get; set; }
+
+        [Option('c', "contrast", Required = false, Default = 0.125f)]
+        public float Contrast { get; set; }
+    }
+
     class Program
     {
-        const int SRC_SIZE = 8;
-        const int DST_SIZE = 4;
-        const int ITERATIONS = 8;
-        const float CONTRAST = 0.125f;
-
-        static List<Block> MakeAllTransforms(Image[,] sourceBlocks)
+        static List<Block> MakeAllTransforms(Image[,] sourceBlocks, int sourceSize, int destSize)
         {
-            int scaleFactor = SRC_SIZE / DST_SIZE;
+            int scaleFactor = sourceSize / destSize;
             List<Block> blocks = new List<Block>();
             for (byte y = 0; y < sourceBlocks.GetLength(0); y++)
             {
@@ -36,12 +53,12 @@ namespace FractalImageCompression
             return blocks;
         }
 
-        static Atom[,] Compress(Image image)
+        static Atom[,] Compress(Image image, int sourceSize, int destSize, float contrast)
         {
-            Image[,] sourceBlocks = image.ExtractBlocksOfSize(SRC_SIZE);
-            Image[,] destBlocks = image.ExtractBlocksOfSize(DST_SIZE);
+            Image[,] sourceBlocks = image.ExtractBlocksOfSize(sourceSize);
+            Image[,] destBlocks = image.ExtractBlocksOfSize(destSize);
 
-            List<Block> allTransformedBlocks = MakeAllTransforms(sourceBlocks);
+            List<Block> allTransformedBlocks = MakeAllTransforms(sourceBlocks, sourceSize, destSize);
 
             Atom[,] compressedData = new Atom[destBlocks.GetLength(0), destBlocks.GetLength(1)];
             Parallel.For(0, destBlocks.GetLength(0), y =>
@@ -53,7 +70,6 @@ namespace FractalImageCompression
                     Image destBlock = destBlocks[y, x];
                     foreach (Block block in allTransformedBlocks)
                     {
-                        float contrast = CONTRAST;
                         float brightness = destBlock.Add(block.Image.Multiply(-contrast)).Average();
 
                         float distance = destBlock.DistanceTo(block.Image.Multiply(contrast).Add(brightness));
@@ -69,17 +85,17 @@ namespace FractalImageCompression
             return compressedData;
         }
 
-        static Image[] Decompress(Atom[,] compressedData, int iter)
+        static Image[] Decompress(Atom[,] compressedData, int sourceSize, int destSize, int iter)
         {
-            int scaleFactor = SRC_SIZE / DST_SIZE;
-            int height = compressedData.GetLength(0) * DST_SIZE;
-            int width = compressedData.GetLength(1) * DST_SIZE;
+            int scaleFactor = sourceSize / destSize;
+            int height = compressedData.GetLength(0) * destSize;
+            int width = compressedData.GetLength(1) * destSize;
 
             List<Image> iterations = new List<Image> { Image.Random(height, width) };
             for (int i = 0; i < iter; i++)
             {
                 Image currentImage = new Image(height, width);
-                Image[,] sourceBlocks = iterations.Last().ExtractBlocksOfSize(SRC_SIZE);
+                Image[,] sourceBlocks = iterations.Last().ExtractBlocksOfSize(sourceSize);
                 for (int y = 0; y < compressedData.GetLength(0); y++)
                 {
                     for (int x = 0; x < compressedData.GetLength(1); x++)
@@ -89,7 +105,7 @@ namespace FractalImageCompression
                             .ApplyTransform(transformData.Transform)
                             .Multiply(transformData.Contrast)
                             .Add(transformData.Brightness);
-                        currentImage.Insert(x * DST_SIZE, y * DST_SIZE, destBlock);
+                        currentImage.Insert(x * destSize, y * destSize, destBlock);
                     }
                 }
                 iterations.Add(currentImage);
@@ -97,25 +113,25 @@ namespace FractalImageCompression
             return iterations.ToArray();
         }
 
-        static Atom[][,] CompressRGBBitmap(SKBitmap bitmap)
+        static Atom[][,] CompressRGBBitmap(SKBitmap bitmap, int sourceSize, int destSize, float contrast)
         {
             Image[] originalData = ImageExtensions.FromBitmap(bitmap);
 
             Atom[][,] compressedData = new Atom[3][,];
-            compressedData[0] = Compress(originalData[0]);
-            compressedData[1] = Compress(originalData[1]);
-            compressedData[2] = Compress(originalData[2]);
+            compressedData[0] = Compress(originalData[0], sourceSize, destSize, contrast);
+            compressedData[1] = Compress(originalData[1], sourceSize, destSize, contrast);
+            compressedData[2] = Compress(originalData[2], sourceSize, destSize, contrast);
 
             return compressedData;
         }
 
-        static SKBitmap DecompressRGBBitmap(Atom[][,] compressedData)
+        static SKBitmap DecompressRGBBitmap(Atom[][,] compressedData, int sourceSize, int destSize, int iter)
         {
             Image[] decompressed = new Image[3]
             {
-                Decompress(compressedData[0], ITERATIONS).Last(),
-                Decompress(compressedData[1], ITERATIONS).Last(),
-                Decompress(compressedData[2], ITERATIONS).Last()
+                Decompress(compressedData[0], sourceSize, destSize, iter).Last(),
+                Decompress(compressedData[1], sourceSize, destSize, iter).Last(),
+                Decompress(compressedData[2], sourceSize, destSize, iter).Last()
             };
             return ImageExtensions.ToBitmap(decompressed);
         }
@@ -197,28 +213,34 @@ namespace FractalImageCompression
 
                 var spec = archive.CreateEntry("spec");
                 using (StreamWriter writer = new StreamWriter(spec.Open()))
-                    writer.WriteLine(compressedData[0].GetLength(0));
+                    writer.WriteLine(compressedData[0].GetLength(1));
+            }
+        }
+
+        static void Run(Options options)
+        {
+            SKBitmap inputBitmap = SKBitmap.Decode(options.InputFile);
+            if (inputBitmap != null)
+            {
+                Atom[][,] compressedData = CompressRGBBitmap(inputBitmap, options.RangeSize, options.DomainSize, options.Contrast);
+                WriteCompressedDataToFile(compressedData, options.OutputFile);
+                inputBitmap.Dispose();
+            }
+            else
+            {
+                Atom[][,] compressedData = ReadCompressedDataFromFile(options.InputFile);
+                using (SKFileWStream fileHandle = new SKFileWStream(options.OutputFile))
+                using (SKBitmap outputBitmap = DecompressRGBBitmap(compressedData, options.RangeSize, options.DomainSize, options.Iterations))
+                {
+                    SKPixmap.Encode(fileHandle, outputBitmap, SKEncodedImageFormat.Png, 100);
+                }
             }
         }
 
         static void Main(string[] args)
         {
-            SKBitmap inputBitmap = SKBitmap.Decode(args[0]);
-            if (inputBitmap != null)
-            {
-                Atom[][,] compressedData = CompressRGBBitmap(inputBitmap);
-                WriteCompressedDataToFile(compressedData, "compressed.frc");
-                inputBitmap.Dispose();
-            }
-            else
-            {
-                Atom[][,] compressedData = ReadCompressedDataFromFile(args[0]);
-                using (SKFileWStream fileHandle = new SKFileWStream("output.png"))
-                using (SKBitmap outputBitmap = DecompressRGBBitmap(compressedData))
-                {
-                    SKPixmap.Encode(fileHandle, outputBitmap, SKEncodedImageFormat.Png, 100);
-                }
-            }
+            var result = Parser.Default.ParseArguments<Options>(args);
+            result.WithParsed(Run);
         }
     }
 }
