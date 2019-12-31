@@ -1,68 +1,29 @@
-﻿using System;
+﻿using SkiaSharp;
 using System.Collections.Generic;
+using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Threading.Tasks;
-using SkiaSharp;
 
 namespace FractalImageCompression
 {
     class Program
     {
-        const int SRC_SIZE = 4;
-        const int DST_SIZE = 2;
+        const int SRC_SIZE = 8;
+        const int DST_SIZE = 4;
         const int ITERATIONS = 8;
-        const float CONTRAST = 0.25f;
-
-        static Image[] LoadImage(string path)
-        {
-            using (SKBitmap bitmap = SKBitmap.Decode(path))
-            {
-                Image[] images = new Image[3] 
-                {
-                    new Image(bitmap.Height, bitmap.Width),
-                    new Image(bitmap.Height, bitmap.Width),
-                    new Image(bitmap.Height, bitmap.Width)
-                };
-                for (int y = 0; y < bitmap.Height; y++)
-                {
-                    for (int x = 0; x < bitmap.Width; x++)
-                    {
-                        SKColor pixel = bitmap.GetPixel(x, y);
-                        images[0].Data[y, x] = (float)pixel.Red / 255;
-                        images[1].Data[y, x] = (float)pixel.Green / 255;
-                        images[2].Data[y, x] = (float)pixel.Blue / 255;
-                    }
-                }
-                return images;
-            }
-        }
-
-        static SKBitmap ToBitmap(Image[] imageData)
-        {
-            SKBitmap bitmap = new SKBitmap(imageData[0].Width, imageData[0].Height, SKColorType.Bgra8888, SKAlphaType.Opaque);
-            for (int y = 0; y < bitmap.Height; y++)
-            {
-                for (int x = 0; x < bitmap.Width; x++)
-                {
-                    byte red = (byte)(Math.Min(Math.Max(imageData[0].Data[y, x] * 255, 0), 255));
-                    byte green = (byte)(Math.Min(Math.Max(imageData[1].Data[y, x] * 255, 0), 255));
-                    byte blue = (byte)(Math.Min(Math.Max(imageData[2].Data[y, x] * 255, 0), 255));
-                    bitmap.SetPixel(x, y, new SKColor(red, green, blue));
-                }
-            }
-            return bitmap;
-        }
+        const float CONTRAST = 0.125f;
 
         static List<Block> MakeAllTransforms(Image[,] sourceBlocks)
         {
             int scaleFactor = SRC_SIZE / DST_SIZE;
             List<Block> blocks = new List<Block>();
-            for (int y = 0; y < sourceBlocks.GetLength(0); y++)
+            for (byte y = 0; y < sourceBlocks.GetLength(0); y++)
             {
-                for (int x = 0; x < sourceBlocks.GetLength(1); x++)
+                for (byte x = 0; x < sourceBlocks.GetLength(1); x++)
                 {
-                    for (int reflection = 0; reflection < (int)Reflection.All; reflection++)
-                        for (int rotation = 0; rotation < (int)Rotation.All; rotation++)
+                    for (byte reflection = 0; reflection < (byte)Reflection.All; reflection++)
+                        for (byte rotation = 0; rotation < (byte)Rotation.All; rotation++)
                         {
                             Transform transform = new Transform((Reflection)reflection, (Rotation)rotation);
                             Image transformedBlock = sourceBlocks[y, x]
@@ -87,7 +48,6 @@ namespace FractalImageCompression
             {
                 Parallel.For(0, destBlocks.GetLength(1), x =>
                 {
-                    Console.WriteLine($"Compressing Cell: [{y}, {x}]");
                     float minDistance = float.PositiveInfinity;
 
                     Image destBlock = destBlocks[y, x];
@@ -137,37 +97,127 @@ namespace FractalImageCompression
             return iterations.ToArray();
         }
 
-        static void Main(string[] args)
+        static Atom[][,] CompressRGBBitmap(SKBitmap bitmap)
         {
-            Console.WriteLine("Loading base image...");
-            Image[] originalData = LoadImage(args[0]);
+            Image[] originalData = ImageExtensions.FromBitmap(bitmap);
 
-            Console.WriteLine("Base image loaded, beginning compression...");
             Atom[][,] compressedData = new Atom[3][,];
-
-            Console.WriteLine("Compressing red channel...");
             compressedData[0] = Compress(originalData[0]);
-
-            Console.WriteLine("Compressing green channel...");
             compressedData[1] = Compress(originalData[1]);
-
-            Console.WriteLine("Compressing blue channel...");
             compressedData[2] = Compress(originalData[2]);
 
-            Console.WriteLine("Compression completed, beginning decompression...");
+            return compressedData;
+        }
+
+        static SKBitmap DecompressRGBBitmap(Atom[][,] compressedData)
+        {
             Image[] decompressed = new Image[3]
             {
                 Decompress(compressedData[0], ITERATIONS).Last(),
                 Decompress(compressedData[1], ITERATIONS).Last(),
                 Decompress(compressedData[2], ITERATIONS).Last()
             };
-            Console.WriteLine("Image decompressed successfully!");
+            return ImageExtensions.ToBitmap(decompressed);
+        }
 
-            using (SKFileWStream fileHandle = new SKFileWStream("output.png"))
-            using (SKBitmap bitmap = ToBitmap(decompressed))
+        static Atom[,] ReadCompressedChannelFromStream(Stream stream, int width)
+        {
+            List<Atom> atoms = new List<Atom>();
+            bool readSuccessful = false;
+            do
             {
-                Console.WriteLine("Writing decompressed image to file...");
-                SKPixmap.Encode(fileHandle, bitmap, SKEncodedImageFormat.Png, 100);
+                readSuccessful = Atom.Deserialize(stream, out Atom atom);
+                atoms.Add(atom);
+            } while (readSuccessful);
+
+            Atom[,] channel = new Atom[atoms.Count / width, width];
+            for (int y = 0; y < atoms.Count / width; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    channel[y, x] = atoms[y * width + x];
+                }
+            }
+            return channel;
+        }
+
+        static Atom[][,] ReadCompressedDataFromFile(string path)
+        {
+            using (FileStream file = File.OpenRead(path))
+            using (ZipArchive archive = new ZipArchive(file, ZipArchiveMode.Read))
+            {
+                int width;
+                Atom[][,] compressedData = new Atom[3][,];
+
+                var spec = archive.GetEntry("spec");
+                using (StreamReader reader = new StreamReader(spec.Open()))
+                    width = int.Parse(reader.ReadLine());
+
+                var red = archive.GetEntry("red");
+                using (Stream stream = red.Open())
+                    compressedData[0] = ReadCompressedChannelFromStream(stream, width);
+
+                var green = archive.GetEntry("green");
+                using (Stream stream = green.Open())
+                    compressedData[1] = ReadCompressedChannelFromStream(stream, width);
+
+                var blue = archive.GetEntry("blue");
+                using (Stream stream = blue.Open())
+                    compressedData[2] = ReadCompressedChannelFromStream(stream, width);
+
+                return compressedData;
+            }
+        }
+
+        static void WriteCompressedChannelToStream(Atom[,] channel, Stream stream)
+        {
+            foreach (Atom atom in channel)
+            {
+                byte[] data = atom.Serialize();
+                stream.Write(data, 0, data.Length);
+            }
+        }
+
+        static void WriteCompressedDataToFile(Atom[][,] compressedData, string path)
+        {
+            using (FileStream file = File.Create(path))
+            using (ZipArchive archive = new ZipArchive(file, ZipArchiveMode.Create))
+            {
+                var red = archive.CreateEntry("red");
+                using (Stream stream = red.Open())
+                    WriteCompressedChannelToStream(compressedData[0], stream);
+
+                var green = archive.CreateEntry("green");
+                using (Stream stream = green.Open())
+                    WriteCompressedChannelToStream(compressedData[1], stream);
+
+                var blue = archive.CreateEntry("blue");
+                using (Stream stream = blue.Open())
+                    WriteCompressedChannelToStream(compressedData[2], stream);
+
+                var spec = archive.CreateEntry("spec");
+                using (StreamWriter writer = new StreamWriter(spec.Open()))
+                    writer.WriteLine(compressedData[0].GetLength(0));
+            }
+        }
+
+        static void Main(string[] args)
+        {
+            SKBitmap inputBitmap = SKBitmap.Decode(args[0]);
+            if (inputBitmap != null)
+            {
+                Atom[][,] compressedData = CompressRGBBitmap(inputBitmap);
+                WriteCompressedDataToFile(compressedData, "compressed.frc");
+                inputBitmap.Dispose();
+            }
+            else
+            {
+                Atom[][,] compressedData = ReadCompressedDataFromFile(args[0]);
+                using (SKFileWStream fileHandle = new SKFileWStream("output.png"))
+                using (SKBitmap outputBitmap = DecompressRGBBitmap(compressedData))
+                {
+                    SKPixmap.Encode(fileHandle, outputBitmap, SKEncodedImageFormat.Png, 100);
+                }
             }
         }
     }
