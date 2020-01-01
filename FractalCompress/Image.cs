@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace FractalImageCompression
+namespace FractalCompress
 {
     public class Image
     {
@@ -151,7 +151,7 @@ namespace FractalImageCompression
             {
                 for (int x = 0; x < newImage.Width; x++)
                 {
-                    newImage.Data[y, x] = Data[y / factor, x / factor];
+                    newImage.Data[y, x] = Data[y * factor, x * factor];
                 }
             }
             return newImage;

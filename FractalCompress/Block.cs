@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace FractalImageCompression
+namespace FractalCompress
 {
     public class Block
     {

@@ -6,7 +6,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace FractalImageCompression
+namespace FractalCompress
 {
     public class Options
     {
@@ -229,8 +229,8 @@ namespace FractalImageCompression
             else
             {
                 Atom[][,] compressedData = ReadCompressedDataFromFile(options.InputFile);
-                using (SKFileWStream fileHandle = new SKFileWStream(options.OutputFile))
                 using (SKBitmap outputBitmap = DecompressRGBBitmap(compressedData, options.RangeSize, options.DomainSize, options.Iterations))
+                using (SKFileWStream fileHandle = new SKFileWStream(options.OutputFile))
                 {
                     SKPixmap.Encode(fileHandle, outputBitmap, SKEncodedImageFormat.Png, 100);
                 }

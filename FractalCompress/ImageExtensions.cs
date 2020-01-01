@@ -2,7 +2,7 @@
 using SkiaSharp;
 using System;
 
-namespace FractalImageCompression
+namespace FractalCompress
 {
     public static class ImageExtensions
     {

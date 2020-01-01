@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace FractalImageCompression
+namespace FractalCompress
 {
     public enum Reflection
     {
