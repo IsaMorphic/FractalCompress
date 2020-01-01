@@ -1,4 +1,4 @@
-﻿using CommandLine;
+using CommandLine;
 using SkiaSharp;
 using System.Collections.Generic;
 using System.IO;
@@ -22,7 +22,7 @@ namespace FractalCompress
         [Option('r', "rangesize", Required = true)]
         public int RangeSize { get; set; }
 
-        [Option('n', "iter", Required = false, Default = 8)]
+        [Option('n', "numiter", Required = false, Default = 8)]
         public int Iterations { get; set; }
 
         [Option('c', "contrast", Required = false, Default = 0.125f)]
@@ -96,9 +96,9 @@ namespace FractalCompress
             {
                 Image currentImage = new Image(height, width);
                 Image[,] sourceBlocks = iterations.Last().ExtractBlocksOfSize(sourceSize);
-                for (int y = 0; y < compressedData.GetLength(0); y++)
+                Parallel.For(0, compressedData.GetLength(0), y =>
                 {
-                    for (int x = 0; x < compressedData.GetLength(1); x++)
+                    Parallel.For(0, compressedData.GetLength(1), x =>
                     {
                         Atom transformData = compressedData[y, x];
                         Image destBlock = sourceBlocks[transformData.Y, transformData.X].Reduce(scaleFactor)
@@ -106,8 +106,8 @@ namespace FractalCompress
                             .Multiply(transformData.Contrast)
                             .Add(transformData.Brightness);
                         currentImage.Insert(x * destSize, y * destSize, destBlock);
-                    }
-                }
+                    });
+                });
                 iterations.Add(currentImage);
             }
             return iterations.ToArray();
