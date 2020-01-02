@@ -33,7 +33,7 @@ namespace FractalCompress
 
         public Image(float[,] data)
         {
-            Data = Data;
+            Data = data;
         }
 
         public Image Copy()
