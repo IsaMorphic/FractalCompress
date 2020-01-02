@@ -42,7 +42,7 @@ namespace FractalCompress.ConsoleApp
         [Option('n', "numiter", HelpText = "Specifies how many times to iterate affine transformations during decompression. Should be no lower than 1. Lower values result in a noisier image, higher values result in longer decompression time.", Required = false, Default = 8)]
         public int Iterations { get; set; }
 
-        [Option('c', "contrast", HelpText = "During compression, specifies how much detail may be retained in the image. (Should be between 0 and 1. Higher values result in retention of finer details, but increases amount of noise)", Required = false, Default = 0.25f)]
+        [Option('c', "contrast", HelpText = "During compression, specifies how much detail may be retained in the image. Should be between 0 and 1. Higher values result in retention of finer details, but increases amount of noise", Required = false, Default = 0.25f)]
         public float Contrast { get; set; }
     }
 
@@ -163,11 +163,11 @@ namespace FractalCompress.ConsoleApp
                     Atom[][,] compressedData = CompressRGBBitmap(inputBitmap, options.RangeSize, options.DomainSize, options.Contrast);
                     WriteCompressedDataToFile(compressedData, options.OutputFile);
                     inputBitmap.Dispose();
-                    Console.WriteLine("Compression completed!");
+                    Console.Write("Compression completed!");
                 }
                 catch (Exception)
                 {
-                    Console.WriteLine("An error occured while compressing the image. Double check your parameters and try again.");
+                    Console.Write("An error occured while compressing the image. Double check your parameters and try again.");
                 }
             }
             else
@@ -181,11 +181,11 @@ namespace FractalCompress.ConsoleApp
                     {
                         SKPixmap.Encode(fileHandle, outputBitmap, SKEncodedImageFormat.Png, 100);
                     }
-                    Console.WriteLine("Decompression completed!");
+                    Console.Write("Decompression completed!");
                 }
                 catch (Exception)
                 {
-                    Console.WriteLine("An error occured while decompressing the image. Double check your parameters and try again.");
+                    Console.Write("An error occured while decompressing the image. Double check your parameters and try again.");
                 }
             }
         }
