@@ -1,5 +1,6 @@
 using CommandLine;
 using SkiaSharp;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
@@ -25,7 +26,7 @@ namespace FractalCompress
         [Option('n', "numiter", Required = false, Default = 8)]
         public int Iterations { get; set; }
 
-        [Option('c', "contrast", Required = false, Default = 0.125f)]
+        [Option('c', "contrast", Required = false, Default = 0.25f)]
         public float Contrast { get; set; }
     }
 
@@ -222,17 +223,31 @@ namespace FractalCompress
             SKBitmap inputBitmap = SKBitmap.Decode(options.InputFile);
             if (inputBitmap != null)
             {
-                Atom[][,] compressedData = CompressRGBBitmap(inputBitmap, options.RangeSize, options.DomainSize, options.Contrast);
-                WriteCompressedDataToFile(compressedData, options.OutputFile);
-                inputBitmap.Dispose();
+                try
+                {
+                    Atom[][,] compressedData = CompressRGBBitmap(inputBitmap, options.RangeSize, options.DomainSize, options.Contrast);
+                    WriteCompressedDataToFile(compressedData, options.OutputFile);
+                    inputBitmap.Dispose();
+                }
+                catch (Exception)
+                {
+                    Console.WriteLine("An error occured while compressing the image. Double check your parameters and try again.");
+                }
             }
             else
             {
-                Atom[][,] compressedData = ReadCompressedDataFromFile(options.InputFile);
-                using (SKBitmap outputBitmap = DecompressRGBBitmap(compressedData, options.RangeSize, options.DomainSize, options.Iterations))
-                using (SKFileWStream fileHandle = new SKFileWStream(options.OutputFile))
+                try
                 {
-                    SKPixmap.Encode(fileHandle, outputBitmap, SKEncodedImageFormat.Png, 100);
+                    Atom[][,] compressedData = ReadCompressedDataFromFile(options.InputFile);
+                    using (SKBitmap outputBitmap = DecompressRGBBitmap(compressedData, options.RangeSize, options.DomainSize, options.Iterations))
+                    using (SKFileWStream fileHandle = new SKFileWStream(options.OutputFile))
+                    {
+                        SKPixmap.Encode(fileHandle, outputBitmap, SKEncodedImageFormat.Png, 100);
+                    }
+                }
+                catch (Exception)
+                {
+                    Console.WriteLine("An error occured while decompressing the image. Double check your parameters and try again.");
                 }
             }
         }
