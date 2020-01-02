@@ -3,7 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
 VisualStudioVersion = 15.0.28307.645
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FractalCompress", "FractalCompress\FractalCompress.csproj", "{AB01DBD6-8837-444B-8C1F-69376D8EB041}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FractalCompress", "FractalCompress\FractalCompress.csproj", "{4B707AE1-D805-40EC-838D-1A252478443D}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FractalCompress.ConsoleApp", "FractalCompress.ConsoleApp\FractalCompress.ConsoleApp.csproj", "{CF02310F-B92D-4A49-9202-0FC78031790E}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -11,10 +13,14 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{AB01DBD6-8837-444B-8C1F-69376D8EB041}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{AB01DBD6-8837-444B-8C1F-69376D8EB041}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{AB01DBD6-8837-444B-8C1F-69376D8EB041}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{AB01DBD6-8837-444B-8C1F-69376D8EB041}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4B707AE1-D805-40EC-838D-1A252478443D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4B707AE1-D805-40EC-838D-1A252478443D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4B707AE1-D805-40EC-838D-1A252478443D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4B707AE1-D805-40EC-838D-1A252478443D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CF02310F-B92D-4A49-9202-0FC78031790E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CF02310F-B92D-4A49-9202-0FC78031790E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CF02310F-B92D-4A49-9202-0FC78031790E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CF02310F-B92D-4A49-9202-0FC78031790E}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

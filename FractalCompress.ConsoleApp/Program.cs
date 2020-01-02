@@ -7,121 +7,39 @@ using System.IO.Compression;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace FractalCompress
+namespace FractalCompress.ConsoleApp
 {
     public class Options
     {
-        [Option('i', "inputfile", Required = true)]
+        [Option('i', "inputfile", HelpText = "Path to a file that serves as input. May be either compressed or uncompressed.", Required = true)]
         public string InputFile { get; set; }
 
-        [Option('o', "outputfile", Required = true)]
+        [Option('o', "outputfile", HelpText = "Path to a file that serves as output. Depending on whether inputfile is compressed, output will be either compressed or decompressed.", Required = true)]
         public string OutputFile { get; set; }
 
-        [Option('d', "domainsize", Required = true)]
+        [Option('d', "domainsize", HelpText = "Specifies the square size of domain blocks. Should be a factor of rangeblocks and no lower than 1.", Required = true)]
         public int DomainSize { get; set; }
 
-        [Option('r', "rangesize", Required = true)]
+        [Option('r', "rangesize", HelpText = "Specifies the square size of range blocks. Should be a factor of both the width and height and now lower than 1.", Required = true)]
         public int RangeSize { get; set; }
 
-        [Option('n', "numiter", Required = false, Default = 8)]
+        [Option('n', "numiter", HelpText = "Specifies how many times to iterate affine transformations during decompression. Should be no lower than 1. Lower values result in a noisier image, higher values result in longer decompression time.", Required = false, Default = 8)]
         public int Iterations { get; set; }
 
-        [Option('c', "contrast", Required = false, Default = 0.25f)]
+        [Option('c', "contrast", HelpText = "During compression, specifies how much detail may be retained in the image. (Should be between 0 and 1. Higher values result in retention of finer details, but increases amount of noise)", Required = false, Default = 0.25f)]
         public float Contrast { get; set; }
     }
 
     class Program
     {
-        static List<Block> MakeAllTransforms(Image[,] sourceBlocks, int sourceSize, int destSize)
-        {
-            int scaleFactor = sourceSize / destSize;
-            List<Block> blocks = new List<Block>();
-            for (byte y = 0; y < sourceBlocks.GetLength(0); y++)
-            {
-                for (byte x = 0; x < sourceBlocks.GetLength(1); x++)
-                {
-                    for (byte reflection = 0; reflection < (byte)Reflection.All; reflection++)
-                        for (byte rotation = 0; rotation < (byte)Rotation.All; rotation++)
-                        {
-                            Transform transform = new Transform((Reflection)reflection, (Rotation)rotation);
-                            Image transformedBlock = sourceBlocks[y, x]
-                                .Reduce(scaleFactor)
-                                .ApplyTransform(transform);
-                            blocks.Add(new Block(x, y, transform, transformedBlock));
-                        }
-                }
-            }
-            return blocks;
-        }
-
-        static Atom[,] Compress(Image image, int sourceSize, int destSize, float contrast)
-        {
-            Image[,] sourceBlocks = image.ExtractBlocksOfSize(sourceSize);
-            Image[,] destBlocks = image.ExtractBlocksOfSize(destSize);
-
-            List<Block> allTransformedBlocks = MakeAllTransforms(sourceBlocks, sourceSize, destSize);
-
-            Atom[,] compressedData = new Atom[destBlocks.GetLength(0), destBlocks.GetLength(1)];
-            Parallel.For(0, destBlocks.GetLength(0), y =>
-            {
-                Parallel.For(0, destBlocks.GetLength(1), x =>
-                {
-                    float minDistance = float.PositiveInfinity;
-
-                    Image destBlock = destBlocks[y, x];
-                    foreach (Block block in allTransformedBlocks)
-                    {
-                        float brightness = destBlock.Add(block.Image.Multiply(-contrast)).Average();
-
-                        float distance = destBlock.DistanceTo(block.Image.Multiply(contrast).Add(brightness));
-                        if (distance < minDistance)
-                        {
-                            Atom data = block.AtomicData;
-                            compressedData[y, x] = new Atom(data.X, data.Y, contrast, brightness, data.Transform);
-                            minDistance = distance;
-                        }
-                    }
-                });
-            });
-            return compressedData;
-        }
-
-        static Image[] Decompress(Atom[,] compressedData, int sourceSize, int destSize, int iter)
-        {
-            int scaleFactor = sourceSize / destSize;
-            int height = compressedData.GetLength(0) * destSize;
-            int width = compressedData.GetLength(1) * destSize;
-
-            List<Image> iterations = new List<Image> { Image.Random(height, width) };
-            for (int i = 0; i < iter; i++)
-            {
-                Image currentImage = new Image(height, width);
-                Image[,] sourceBlocks = iterations.Last().ExtractBlocksOfSize(sourceSize);
-                Parallel.For(0, compressedData.GetLength(0), y =>
-                {
-                    Parallel.For(0, compressedData.GetLength(1), x =>
-                    {
-                        Atom transformData = compressedData[y, x];
-                        Image destBlock = sourceBlocks[transformData.Y, transformData.X].Reduce(scaleFactor)
-                            .ApplyTransform(transformData.Transform)
-                            .Multiply(transformData.Contrast)
-                            .Add(transformData.Brightness);
-                        currentImage.Insert(x * destSize, y * destSize, destBlock);
-                    });
-                });
-                iterations.Add(currentImage);
-            }
-            return iterations.ToArray();
-        }
-
         static Atom[][,] CompressRGBBitmap(SKBitmap bitmap, int sourceSize, int destSize, float contrast)
         {
             Image[] originalData = ImageExtensions.FromBitmap(bitmap);
 
             Atom[][,] compressedData = new Atom[3][,];
-            compressedData[0] = Compress(originalData[0], sourceSize, destSize, contrast);
-            compressedData[1] = Compress(originalData[1], sourceSize, destSize, contrast);
-            compressedData[2] = Compress(originalData[2], sourceSize, destSize, contrast);
+            compressedData[0] = Compressor.Compress(originalData[0], sourceSize, destSize, contrast);
+            compressedData[1] = Compressor.Compress(originalData[1], sourceSize, destSize, contrast);
+            compressedData[2] = Compressor.Compress(originalData[2], sourceSize, destSize, contrast);
 
             return compressedData;
         }
@@ -130,9 +48,9 @@ namespace FractalCompress
         {
             Image[] decompressed = new Image[3]
             {
-                Decompress(compressedData[0], sourceSize, destSize, iter).Last(),
-                Decompress(compressedData[1], sourceSize, destSize, iter).Last(),
-                Decompress(compressedData[2], sourceSize, destSize, iter).Last()
+                Compressor.Decompress(compressedData[0], sourceSize, destSize, iter).Last(),
+                Compressor.Decompress(compressedData[1], sourceSize, destSize, iter).Last(),
+                Compressor.Decompress(compressedData[2], sourceSize, destSize, iter).Last()
             };
             return ImageExtensions.ToBitmap(decompressed);
         }

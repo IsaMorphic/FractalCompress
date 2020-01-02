@@ -28,8 +28,8 @@ namespace FractalCompress
         {
             return new byte[] {
                 X, Y,
-                (byte)Math.Clamp(Contrast * 255, 0, 255),
-                (byte)Math.Clamp(Brightness * 255, 0, 255),
+                (byte)MathExtensions.Clamp(Contrast * 255, 0, 255),
+                (byte)MathExtensions.Clamp(Brightness * 255, 0, 255),
                 (byte)Transform.Reflection,
                 (byte)Transform.Rotation
             };

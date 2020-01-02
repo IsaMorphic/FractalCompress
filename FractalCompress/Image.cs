@@ -16,8 +16,27 @@ namespace FractalCompress
 
         public Image(float[,] data)
         {
-            Data = new float[data.GetLength(0), data.GetLength(1)];
-            Array.Copy(data, Data, data.Length);
+            Data = Data;
+        }
+
+        public Image Copy()
+        {
+            float[,] data = new float[Data.GetLength(0), Data.GetLength(1)];
+            Array.Copy(Data, data, Data.Length);
+            return new Image(data);
+        }
+
+        public Image Reduce(int factor)
+        {
+            Image newImage = new Image(Height / factor, Width / factor);
+            for (int y = 0; y < newImage.Height; y++)
+            {
+                for (int x = 0; x < newImage.Width; x++)
+                {
+                    newImage.Data[y, x] = Data[y * factor, x * factor];
+                }
+            }
+            return newImage;
         }
 
         public Image Reflect(Reflection reflection)
@@ -86,6 +105,12 @@ namespace FractalCompress
             }
         }
 
+        public Image ApplyTransform(Transform transform)
+        {
+            return Reflect(transform.Reflection)
+                .Rotate(transform.Rotation);
+        }
+
         public Image Multiply(float s)
         {
             Image newImage = Copy();
@@ -138,25 +163,6 @@ namespace FractalCompress
             return newImage;
         }
 
-        public Image ApplyTransform(Transform transform)
-        {
-            return Reflect(transform.Reflection)
-                .Rotate(transform.Rotation);
-        }
-
-        public Image Reduce(int factor)
-        {
-            Image newImage = new Image(Height / factor, Width / factor);
-            for (int y = 0; y < newImage.Height; y++)
-            {
-                for (int x = 0; x < newImage.Width; x++)
-                {
-                    newImage.Data[y, x] = Data[y * factor, x * factor];
-                }
-            }
-            return newImage;
-        }
-
         public Image SubImage(int startX, int startY, int endX, int endY)
         {
             Image newImage = new Image(endY - startY, endX - startX);
@@ -170,9 +176,33 @@ namespace FractalCompress
             return newImage;
         }
 
-        public Image Copy()
+        public Image[,] ExtractBlocksOfSize(int blockSize)
         {
-            return new Image(Data);
+            int numBlocksY = Height / blockSize;
+            int numBlocksX = Width / blockSize;
+            Image[,] blocks = new Image[numBlocksY, numBlocksX];
+            for (int y = 0; y < numBlocksY; y++)
+            {
+                for (int x = 0; x < numBlocksX; x++)
+                {
+                    blocks[y, x] = SubImage(x * blockSize, y * blockSize, (x + 1) * blockSize, (y + 1) * blockSize);
+                }
+            }
+            return blocks;
+        }
+
+        public void Insert(int startX, int startY, Image other)
+        {
+            int endX = startX + other.Width;
+            int endY = startY + other.Height;
+
+            for (int y = startY; y < endY; y++)
+            {
+                for (int x = startX; x < endX; x++)
+                {
+                    Data[y, x] = other.Data[y - startY, x - startX];
+                }
+            }
         }
 
         public float DistanceTo(Image other)
@@ -196,20 +226,6 @@ namespace FractalCompress
                 for (int x = 0; x < Width; x++)
                     sum += Data[y, x];
             return sum / Data.Length;
-        }
-
-        public void Insert(int startX, int startY, Image other)
-        {
-            int endX = startX + other.Width;
-            int endY = startY + other.Height;
-
-            for (int y = startY; y < endY; y++)
-            {
-                for (int x = startX; x < endX; x++)
-                {
-                    Data[y, x] = other.Data[y - startY, x - startX];
-                }
-            }
         }
 
         public static Image Random(int height, int width)
